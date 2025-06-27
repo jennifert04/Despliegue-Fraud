@@ -9,7 +9,7 @@ import sklearn # Import sklearn to check version
 st.title('Fraud Detection Prediction App')
 
 # File upload
-uploaded_file = st.file_uploader("Upload your Excel file (e.g., datos_futuros.xlsx)", type=['xlsx'])
+uploaded_file = st.st_uploader("Upload your Excel file (e.g., datos_futuros.xlsx)", type=['xlsx'])
 
 if uploaded_file is not None:
     try:
@@ -20,9 +20,13 @@ if uploaded_file is not None:
         st.write(df.head())
 
         # --- Data preprocessing steps ---
-        # Drop unnecessary columns. Keep 'oldbalanceOrg' as it's a critical feature.
-        # Ensure 'errors='ignore'' is used to prevent errors if a column is already missing.
-        columns_to_drop = ['newbalanceDest', 'oldbalanceDest', 'step', 'nameOrig', 'nameDest', 'isFlaggedFraud']
+        # Define all columns to drop, INCLUDING 'oldbalanceOrg' since the model wasn't trained with it.
+        columns_to_drop = [
+            'newbalanceDest', 'oldbalanceDest', 'step',
+            'nameOrig', 'nameDest', 'isFlaggedFraud',
+            'oldbalanceOrg' # IMPORTANT: Add oldbalanceOrg here as it was not in training data
+        ]
+        # Drop only the columns that are present in the current DataFrame
         df = df.drop(columns=[col for col in columns_to_drop if col in df.columns], errors='ignore')
 
         # Convert object columns to category (assuming 'type' is the primary object column)
@@ -31,7 +35,6 @@ if uploaded_file is not None:
                 df[col] = df[col].astype('category')
 
         # One-hot encode 'type' column
-        # Use drop_first=False to keep all dummy variables, matching typical model training
         df = pd.get_dummies(df, columns=['type'], prefix='type', drop_first=False)
 
         # Define the paths to the scaler and model files
@@ -39,8 +42,6 @@ if uploaded_file is not None:
         model_filename = 'best_fraud_detection_model_SVM.pkl' # Ensure this matches your model file name
 
         # Check if the scaler and model files exist
-        # In a real deployment, these files would need to be accessible.
-        # For local testing, ensure they are in the same directory as your Streamlit app.
         if not os.path.exists(scaler_filename):
             st.error(f"Error: Scaler file '{scaler_filename}' not found. Please ensure it's in the correct directory.")
             st.stop()
@@ -57,24 +58,21 @@ if uploaded_file is not None:
             st.error(f"Error loading scaler or model: {e}")
             st.stop()
 
-        # Define columns to be scaled. 'oldbalanceOrg' is now included.
-        cols_to_scale = ['amount', 'oldbalanceOrg', 'newbalanceOrig']
+        # Define columns to be scaled. 'oldbalanceOrg' is removed from here.
+        cols_to_scale = ['amount', 'newbalanceOrig'] # oldbalanceOrg removed
         present_cols_to_scale = [col for col in cols_to_scale if col in df.columns]
 
         if present_cols_to_scale:
             df[present_cols_to_scale] = loaded_scaler.transform(df[present_cols_to_scale])
             st.info(f"Scaled columns: {present_cols_to_scale}")
         else:
-            st.warning("No columns found to scale among 'amount', 'oldbalanceOrg', 'newbalanceOrig'.")
+            st.warning("No columns found to scale among 'amount', 'newbalanceOrig'.")
 
 
-        # IMPORTANT: Ensure that the dataframe has all expected columns in the correct order
-        # This list MUST exactly match the features and their order used during model training.
-        # Based on the original data and common preprocessing, these are likely candidates.
-        # Adjust this list if your model was trained with different features or order.
+        # IMPORTANT: Ensure that the dataframe has all expected columns in the correct order.
+        # This list NOW EXACTLY MATCHES your provided training DataFrame structure.
         expected_columns = [
             'amount',
-            'oldbalanceOrg',
             'newbalanceOrig',
             'type_CASH_IN',
             'type_CASH_OUT',
@@ -84,7 +82,6 @@ if uploaded_file is not None:
         ]
 
         # Add missing columns with default 0 to match the training data's feature set
-        # This is crucial for consistency between training and inference.
         for col in expected_columns:
             if col not in df.columns:
                 df[col] = 0
@@ -125,7 +122,7 @@ if uploaded_file is not None:
             predictions = loaded_model.predict(df)
 
             # Add predictions to the DataFrame
-            df['isFraud_prediction'] = predictions # Renamed to be more explicit
+            df['isFraud_prediction'] = predictions
 
             st.subheader("Data with Predictions:")
             st.write(df.head())
@@ -140,12 +137,12 @@ if uploaded_file is not None:
 
         except Exception as e:
             st.error(f"Error during prediction: {e}")
-            st.write("Please ensure the input data structure and feature order precisely match the model's training requirements.")
+            st.write("Despite matching feature names, a prediction error occurred. This might still be related to a scikit-learn version mismatch, or an issue with the model itself if it's corrupted or incompatible with the loaded data's internal representation.")
+            st.write(f"Current scikit-learn version: {sklearn.__version__}")
             st.write(f"Expected columns by model (from `expected_columns` list): {expected_columns}")
             st.write(f"Columns in preprocessed DataFrame: {df.columns.tolist()}")
-            st.write("The error might be due to unexpected data values (e.g., NaNs, Infs) or data type mismatches.")
+            st.write("Please double-check the scikit-learn version used during model training and ensure it exactly matches your current environment. If the version matches and the error persists, consider re-saving your model with the current scikit-learn version.")
 
     except Exception as e:
         st.error(f"Error processing the uploaded file: {e}")
         st.write("Please ensure the file is a valid Excel file and its content matches the expected format (e.g., column names).")
-
