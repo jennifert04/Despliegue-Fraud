@@ -57,6 +57,8 @@ if uploaded_file is not None:
 
         # Añadir columna de predicciones al dataframe original sin modificar
         df_original['Fraude_Predicho'] = preds
+        df_original['Etiqueta_Fraude'] = df_original['Fraude_Predicho'].map({1: 'Fraude', 0: 'No Fraude'})
+
 
         st.subheader("Datos originales con columna de predicción:")
         st.write(df_original.head())
