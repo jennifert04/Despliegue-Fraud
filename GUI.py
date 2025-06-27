@@ -40,7 +40,7 @@ if uploaded_file is not None:
         df = pd.get_dummies(df, columns=['type'], prefix='type', drop_first=False)
 
         # Define the paths to the scaler and model files
-        scaler_filename = 'standard_scaler.pkl'
+        scaler_filename = 'standard_scaler_fraud.pkl'
         model_filename = 'best_fraud_detection_model_SVM.pkl' # Ensure this matches your model file name
 
         # Check if the scaler and model files exist
