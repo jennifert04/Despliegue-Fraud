@@ -60,8 +60,8 @@ if uploaded_file is not None:
             else:
                 st.warning("Columns 'amount' or 'newbalanceOrig' not found for scaling")
             
-            st.subheader("DataFrame preprocesado para predicción:")
-            st.write(df.head())
+        st.subheader("DataFrame preprocesado para predicción:")
+        st.write(df.head())
 
             
 
