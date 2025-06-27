@@ -1,70 +1,63 @@
 import streamlit as st
 import pandas as pd
-import joblib
 import os
+import joblib
 
-# Streamlit app title
-st.title('Fraud Detection Prediction App')
+# Título de la app
+st.title('Detección de Fraude en Transacciones')
 
-uploaded_file = st.file_uploader("Upload your Excel file (datos_futuros.xlsx)", type=['xlsx'])
+# Carga archivo Excel
+uploaded_file = st.file_uploader("Sube tu archivo Excel (.xlsx) con datos de transacciones", type=['xlsx'])
 
 if uploaded_file is not None:
     try:
+        # Leer archivo
         df = pd.read_excel(uploaded_file)
-        st.subheader("Original Data:")
+        st.subheader("Datos originales cargados:")
         st.write(df.head())
 
-        # Drop unnecessary columns safely
-        drop_cols = ['newbalanceDest', 'oldbalanceDest', 'oldbalanceOrg', 'step', 'nameOrig', 'nameDest', 'isFlaggedFraud']
-        df = df.drop(columns=[c for c in drop_cols if c in df.columns], errors='ignore')
+        # Eliminar columnas no usadas
+        cols_to_drop = ['newbalanceDest', 'oldbalanceDest', 'oldbalanceOrg', 'step', 'nameOrig', 'nameDest', 'isFlaggedFraud']
+        df = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
 
-        # Cast to float to avoid scaling issues
-        df['amount'] = df['amount'].astype(float)
-        df['newbalanceOrig'] = df['newbalanceOrig'].astype(float)
+        # Convertir columnas tipo object a categoría
+        for col in df.select_dtypes(include='object').columns:
+            df[col] = df[col].astype('category')
 
-        # Load scaler and model
-        scaler_filename = 'fraud_standard_scaler.pkl'
-        model_filename = 'best_fraud_detection_model_SVM.pkl'
+        # One-hot encoding para la columna 'type'
+        df = pd.get_dummies(df, columns=['type'], prefix='type', drop_first=False)
 
-        if not os.path.exists(scaler_filename):
-            st.error(f"Scaler file '{scaler_filename}' not found.")
-        elif not os.path.exists(model_filename):
-            st.error(f"Model file '{model_filename}' not found.")
-        else:
-            loaded_scaler = joblib.load(scaler_filename)
-            loaded_model = joblib.load(model_filename)
+        # Asegurar columnas esperadas para el modelo
+        expected_columns = ['amount', 'newbalanceOrig', 'type_CASH_IN', 'type_CASH_OUT', 'type_DEBIT', 'type_PAYMENT', 'type_TRANSFER']
+        for col in expected_columns:
+            if col not in df.columns:
+                df[col] = 0
 
-            st.write("Antes de escalar:")
-            st.write(df[['amount', 'newbalanceOrig']].dtypes)
-            st.write(df[['amount', 'newbalanceOrig']].head())
+        df = df[expected_columns]
 
-            # Escalar
-            df[['amount', 'newbalanceOrig']] = loaded_scaler.transform(df[['amount', 'newbalanceOrig']])
+        # Cargar scaler y modelo
+        scaler_path = 'fraud_standard_scaler.pkl'
+        model_path = 'best_fraud_detection_model_SVM.pkl'
 
-            st.write("Después de escalar:")
-            st.write(df[['amount', 'newbalanceOrig']].dtypes)
-            st.write(df[['amount', 'newbalanceOrig']].head())
+        if not os.path.exists(scaler_path) or not os.path.exists(model_path):
+            st.error("Error: Archivos de scaler o modelo no encontrados.")
+            st.stop()
 
-            # One-hot encode 'type'
-            df = pd.get_dummies(df, columns=['type'], prefix='type', drop_first=False)
+        scaler = joblib.load(scaler_path)
+        model = joblib.load(model_path)
 
-            # Añadir columnas faltantes para consistencia
-            expected_cols = ['amount', 'newbalanceOrig', 'type_CASH_IN', 'type_CASH_OUT', 'type_DEBIT', 'type_PAYMENT', 'type_TRANSFER']
-            for c in expected_cols:
-                if c not in df.columns:
-                    df[c] = 0
+        # Escalar columnas
+        df[['amount', 'newbalanceOrig']] = scaler.transform(df[['amount', 'newbalanceOrig']])
 
-            df = df[expected_cols]
+        # Realizar predicciones
+        preds = model.predict(df)
+        df['Fraude_Predicho'] = preds
 
-            # Predecir
-            predictions = loaded_model.predict(df)
-            df['predictions'] = predictions
+        st.subheader("Predicciones:")
+        st.write(df.head())
 
-            st.subheader("Predictions:")
-            st.write(df.head())
-
-            fraud_count = df['predictions'].sum()
-            st.write(f"Predicted fraud transactions: {fraud_count}")
+        fraud_count = df['Fraude_Predicho'].sum()
+        st.write(f"Número total de transacciones predichas como fraudulentas: {fraud_count}")
 
     except Exception as e:
-        st.error(f"Error processing file: {e}")
+        st.error(f"Ocurrió un error durante el procesamiento: {e}")
