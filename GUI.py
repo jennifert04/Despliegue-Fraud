@@ -19,9 +19,8 @@ if uploaded_file is not None:
 
         # Data preprocessing steps (as in the original notebook)
         # Drop unnecessary columns
-        df = df.drop(columns=['newbalanceDest', 'oldbalanceDest', 'oldbalanceOrg'], errors='ignore')
-        df = df.drop(columns=['step', 'nameOrig', 'nameDest'], errors='ignore')
-        df = df.drop(columns=['isFlaggedFraud'], errors='ignore')
+        # En lugar de eliminar oldbalanceOrg, solo elimina las que no necesita, mantén oldbalanceOrg
+        df = df.drop(columns=['newbalanceDest', 'oldbalanceDest', 'step', 'nameOrig', 'nameDest', 'isFlaggedFraud'], errors='ignore')
 
         # Convert object columns to category (assuming 'type' is the only object column left)
         for col in df.columns:
