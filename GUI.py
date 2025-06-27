@@ -10,34 +10,36 @@ SCALER_PATH = 'standard_scaler.pkl'
 
 # Function to preprocess the data (adapted for the new dataset)
 def preprocess_data(df, scaler):
-    # Drop specified columns (dejamos oldbalanceOrg porque no fue usada en el entrenamiento)
+    # Elimina solo columnas irrelevantes
     df = df.drop(columns=['newbalanceDest', 'oldbalanceDest', 'step', 'nameOrig', 'nameDest', 'isFlaggedFraud'])
 
-    # Convert object type columns to category
+    # Convertir columnas tipo object a categoría
     for col in df.columns:
         if df[col].dtype == 'object':
             df[col] = df[col].astype('category')
 
-    # Apply One-Hot Encoding to the 'type' column
+    # One-hot encoding para la columna 'type'
     df = pd.get_dummies(df, columns=['type'], prefix='type', drop_first=False)
 
-    # Convert dummy variables to boolean (importante para coincidir con el entrenamiento)
+    # Asegura que las columnas dummy sean booleanas
     dummy_cols = [col for col in df.columns if col.startswith('type_')]
     df[dummy_cols] = df[dummy_cols].astype(bool)
 
-    # Apply Scaling to 'amount' and 'newbalanceOrig'
-    df[['amount', 'newbalanceOrig']] = scaler.transform(df[['amount', 'newbalanceOrig']])
+    # Escalar variables numéricas: incluye oldbalanceOrg
+    df[['amount', 'newbalanceOrig', 'oldbalanceOrg']] = scaler.transform(
+        df[['amount', 'newbalanceOrig', 'oldbalanceOrg']]
+    )
 
-    # Expected columns based on the model training
-    expected_columns = ['amount', 'newbalanceOrig', 'type_CASH_IN', 'type_CASH_OUT',
-                        'type_DEBIT', 'type_PAYMENT', 'type_TRANSFER']
-    
-    # Add any missing dummy columns as False
+    # Lista de columnas esperadas por el modelo
+    expected_columns = ['amount', 'newbalanceOrig', 'oldbalanceOrg',
+                        'type_CASH_IN', 'type_CASH_OUT', 'type_DEBIT', 'type_PAYMENT', 'type_TRANSFER']
+
+    # Añadir columnas faltantes como False
     for col in expected_columns:
         if col not in df.columns:
             df[col] = False
 
-    # Ensure the correct column order
+    # Reordenar columnas
     df = df[expected_columns]
 
     return df
