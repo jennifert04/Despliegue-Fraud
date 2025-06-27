@@ -58,7 +58,7 @@ if uploaded_file is not None:
             if present_cols_to_scale:
                 df[present_cols_to_scale] = loaded_scaler.transform(df[present_cols_to_scale])
             else:
-                st.warning("Columns 'amount' or 'newbalanceOrig' not found for scaling
+                st.warning("Columns 'amount' or 'newbalanceOrig' not found for scaling")
             
             st.subheader("DataFrame preprocesado para predicción:")
             st.write(df.head())
