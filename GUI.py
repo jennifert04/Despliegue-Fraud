@@ -9,7 +9,8 @@ import sklearn # Import sklearn to check version
 st.title('Fraud Detection Prediction App')
 
 # File upload
-uploaded_file = st.st_uploader("Upload your Excel file (e.g., datos_futuros.xlsx)", type=['xlsx'])
+# File upload (assuming the user will upload a file now)
+uploaded_file = st.file_uploader("Upload your Excel file (datos_futuros.xlsx)", type=['xlsx'])
 
 if uploaded_file is not None:
     try:
