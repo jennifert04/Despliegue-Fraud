@@ -17,6 +17,14 @@ if uploaded_file is not None:
         st.subheader("Original Data:")
         st.write(df.head())
 
+        # Mostrar tipos de dato antes de conversión
+        st.subheader("Tipos de dato antes de la conversión:")
+        st.write(df[['amount', 'newbalanceOrig']].dtypes)
+
+        # Mostrar algunos valores antes de escalar
+        st.subheader("Valores originales (antes de escalar):")
+        st.write(df[['amount', 'newbalanceOrig']].head())
+
         # Data preprocessing steps (as in the original notebook)
         # Drop unnecessary columns
         df = df.drop(columns=['newbalanceDest', 'oldbalanceDest', 'oldbalanceOrg'], errors='ignore')
@@ -49,15 +57,28 @@ if uploaded_file is not None:
             df['amount'] = pd.to_numeric(df['amount'], errors='coerce').astype(float)
             df['newbalanceOrig'] = pd.to_numeric(df['newbalanceOrig'], errors='coerce').astype(float)
 
+            # Mostrar tipos de dato después de la conversión
+            st.subheader("Tipos de dato después de la conversión a float:")
+            st.write(df[['amount', 'newbalanceOrig']].dtypes)
+
             # Warn if there are nulls after conversion
             if df[['amount', 'newbalanceOrig']].isnull().any().any():
                 st.warning("⚠️ Se encontraron valores nulos tras conversión a float.")
+
+            # Mostrar algunos valores después de la conversión (antes de escalar)
+            st.subheader("Valores después de la conversión (antes de escalar):")
+            st.write(df[['amount', 'newbalanceOrig']].head())
 
             # Apply scaling to relevant columns
             cols_to_scale = ['amount', 'newbalanceOrig']
             present_cols_to_scale = [col for col in cols_to_scale if col in df.columns]
             if present_cols_to_scale:
-                df[present_cols_to_scale] = loaded_scaler.transform(df[present_cols_to_scale])
+                scaled_values = loaded_scaler.transform(df[present_cols_to_scale])
+                df[present_cols_to_scale] = scaled_values
+
+                # Mostrar valores escalados
+                st.subheader("Valores escalados (StandardScaler):")
+                st.write(pd.DataFrame(scaled_values, columns=present_cols_to_scale).head())
             else:
                 st.warning("Columns 'amount' or 'newbalanceOrig' not found for scaling.")
 
