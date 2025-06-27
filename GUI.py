@@ -23,7 +23,7 @@ if uploaded_file is not None:
         df['newbalanceOrig'] = df['newbalanceOrig'].astype(float)
 
         # Load scaler and model
-        scaler_filename = 'standard_scaler.pkl'
+        scaler_filename = 'fraud_standard_scaler.pkl'
         model_filename = 'best_fraud_detection_model_SVM.pkl'
 
         if not os.path.exists(scaler_filename):
