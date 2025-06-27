@@ -1,82 +1,82 @@
-# prompt: haz el despliegue anterior pero en streamlit
-
 import streamlit as st
 import pandas as pd
 import joblib
 import os
 
-# Title for the app
-st.title('Fraud Detection Prediction App')
+# ======== FUNCIÓN DE PREPROCESAMIENTO ===========
+def preprocess_data(df, scaler):
+    # Eliminar columnas innecesarias si existen
+    df = df.drop(columns=[
+        'newbalanceDest', 'oldbalanceDest', 'oldbalanceOrg',
+        'step', 'nameOrig', 'nameDest', 'isFlaggedFraud'
+    ], errors='ignore')
 
-# File uploader
-uploaded_file = st.file_uploader("Upload your Excel file", type=['xlsx'])
-
-if uploaded_file is not None:
-    # Read the uploaded file
-    df = pd.read_excel(uploaded_file)
-
-    # Display the head of the dataframe
-    st.subheader('Original Data')
-    st.write(df.head())
-
-    # --- Data Preprocessing ---
-    # Drop specified columns if they exist
-    cols_to_drop = ['newbalanceDest', 'oldbalanceDest', 'oldbalanceOrg', 'step', 'nameOrig', 'nameDest', 'isFlaggedFraud']
-    for col in cols_to_drop:
-        if col in df.columns:
-            df = df.drop(columns=[col])
-
-    # Convert object columns to category
+    # Convertir columnas tipo object a categoría
     for col in df.columns:
         if df[col].dtype == 'object':
             df[col] = df[col].astype('category')
 
-    # Perform one-hot encoding for 'type' column
-    if 'type' in df.columns:
-        df = pd.get_dummies(df, columns=['type'], prefix='type', drop_first=False)
+    # One-hot encoding de la columna 'type'
+    df = pd.get_dummies(df, columns=['type'], prefix='type', drop_first=False)
 
-    # --- Scaling ---
-    # Assuming the scaler file is available in the environment where Streamlit is running
-    scaler_filename = 'standard_scaler_fraud.pkl'
-    if os.path.exists(scaler_filename):
-        loaded_scaler = joblib.load(scaler_filename)
-        # Check if 'amount' and 'newbalanceOrig' columns exist before scaling
-        cols_to_scale = [col for col in ['amount', 'newbalanceOrig'] if col in df.columns]
-        if cols_to_scale:
-             df[cols_to_scale] = loaded_scaler.transform(df[cols_to_scale])
-        else:
-            st.warning("Columns 'amount' or 'newbalanceOrig' not found for scaling.")
-    else:
-        st.error(f"Scaler file '{scaler_filename}' not found. Please make sure it's in the same directory as your app.")
-        st.stop() # Stop execution if scaler is not found
+    # Columnas esperadas por el modelo
+    expected_columns = [
+        'amount', 'newbalanceOrig', 'type_CASH_IN',
+        'type_CASH_OUT', 'type_DEBIT', 'type_PAYMENT', 'type_TRANSFER'
+    ]
 
-    # Display processed data head
-    st.subheader('Processed Data (before prediction)')
-    st.write(df.head())
+    # Agregar columnas faltantes
+    for col in expected_columns:
+        if col not in df.columns:
+            df[col] = False if col.startswith('type_') else 0
 
-    # --- Model Loading and Prediction ---
-    # Assuming the model file is available in the environment where Streamlit is running
-    model_filename = 'best_fraud_detection_model_SVM.pkl'
-    if os.path.exists(model_filename):
-        loaded_model = joblib.load(model_filename)
+    # Reordenar columnas
+    df = df[expected_columns]
 
-        # Make predictions
-        try:
-            predictions = loaded_model.predict(df)
+    # Aplicar escalado
+    df[['amount', 'newbalanceOrig']] = scaler.transform(df[['amount', 'newbalanceOrig']])
 
-            # Add predictions to the DataFrame
-            df['predictions'] = predictions
+    return df
 
-            # Display results
-            st.subheader('Predictions')
-            st.write(df[['predictions']].head())
-            st.write(f"Number of fraudulent transactions predicted: {df['predictions'].sum()}")
+# ======== CARGA DE MODELO Y SCALER ===========
+try:
+    scaler = joblib.load('standard_scaler.pkl')
+    model = joblib.load('best_fraud_detection_model_SVM.pkl')
+except FileNotFoundError:
+    st.error("❌ Error: No se encontraron los archivos del modelo o del escalador.")
+    st.stop()
 
-        except Exception as e:
-            st.error(f"Error during prediction: {e}")
-            st.warning("Please ensure the columns in your uploaded file match the format expected by the model after preprocessing.")
+# ======== TÍTULO Y DESCRIPCIÓN ===========
+st.title("🔍 Predicción de Transacciones Fraudulentas")
+st.write("""
+Esta aplicación predice si una transacción financiera es fraudulenta, basada en los datos que subas en formato `.xlsx`.
+""")
 
-    else:
-        st.error(f"Model file '{model_filename}' not found. Please make sure it's in the same directory as your app.")
-        st.stop() # Stop execution if model is not found
+# ======== SUBIR ARCHIVO ===========
+uploaded_file = st.file_uploader("📁 Sube tu archivo Excel con los datos (ej: datos_futuros.xlsx)", type=["xlsx"])
 
+if uploaded_file is not None:
+    try:
+        df_original = pd.read_excel(uploaded_file)
+
+        st.subheader("📄 Datos cargados:")
+        st.write(df_original.head())
+
+        # ======== PREPROCESAMIENTO ===========
+        st.subheader("⚙️ Datos preprocesados para el modelo:")
+        df_processed = preprocess_data(df_original.copy(), scaler)
+        st.write(df_processed.head())
+
+        # ======== PREDICCIÓN ===========
+        st.subheader("🤖 Predicciones del Modelo:")
+        predictions = model.predict(df_processed)
+        df_original['Predicción_Fraude'] = predictions
+
+        st.write(df_original[['amount', 'type', 'Predicción_Fraude']].head())
+
+        st.subheader("📊 Resumen de Resultados:")
+        st.write(f"Total de transacciones: {len(df_original)}")
+        st.write(f"Transacciones predichas como FRAUDULENTAS: {df_original['Predicción_Fraude'].sum()}")
+
+    except Exception as e:
+        st.error(f"❌ Ocurrió un error al procesar el archivo: {e}")
