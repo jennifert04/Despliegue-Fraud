@@ -59,9 +59,11 @@ if uploaded_file is not None:
         df_original['Fraude_Predicho'] = preds
         df_original['Etiqueta_Fraude'] = df_original['Fraude_Predicho'].map({1: 'Fraude', 0: 'No Fraude'})
 
-
         st.subheader("Datos originales con columna de predicción:")
-        st.write(df_original.head())
+        st.write(df_original[['amount', 'newbalanceOrig', 'Fraude_Predicho', 'Etiqueta_Fraude']].head())
+
+        #st.subheader("Datos originales con columna de predicción:")
+        #st.write(df_original.head())
 
         fraud_count = df_original['Fraude_Predicho'].sum()
         st.write(f"Número total de transacciones predichas como fraudulentas: {fraud_count}")
