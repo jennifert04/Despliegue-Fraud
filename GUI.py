@@ -6,7 +6,8 @@ import os
 # Function to preprocess the data
 def preprocess_data(df, loaded_scaler):
     df['type'] = df['type'].astype('category')
-    df = df.drop(['step', 'nameOrig', 'nameDest','newbalanceDest', 'oldbalanceDest', 'oldbalanceOrg','isFlaggedFraud'], axis=1)
+    df = df.drop(columns=['newbalanceDest', 'oldbalanceDest', 'step', 'nameOrig', 'nameDest', 'isFlaggedFraud'])
+
 
     df = pd.get_dummies(df, columns=['type'], prefix='type', drop_first=False)
     df[['amount', 'newbalanceOrig']] = loaded_scaler.transform(df[['amount', 'newbalanceOrig']])
