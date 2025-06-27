@@ -1,80 +1,80 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import os
-from sklearn.preprocessing import StandardScaler
 
-# Paths del modelo y el escalador
+# Rutas a archivos
 MODEL_PATH = 'best_fraud_detection_model_SVM.pkl'
 SCALER_PATH = 'standard_scaler.pkl'
 
-# Preprocesamiento con control total de tipos y orden
+# Función de preprocesamiento
 def preprocess_data(df, scaler, expected_columns):
-    # Eliminar columnas irrelevantes
-    df = df.drop(columns=['newbalanceDest', 'oldbalanceDest', 'step', 'nameOrig', 'nameDest', 'isFlaggedFraud'])
+    # Borra columnas que no usas en el modelo
+    cols_to_drop = ['newbalanceDest', 'oldbalanceDest', 'step', 'nameOrig', 'nameDest', 'isFlaggedFraud']
+    df = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
 
-    # One-hot encoding en 'type'
+    # One-hot encoding
     df = pd.get_dummies(df, columns=['type'], prefix='type', drop_first=False)
 
-    # Asegurar columnas dummy como booleanas
-    for col in df.columns:
-        if col.startswith("type_"):
-            df[col] = df[col].astype(bool)
-
-    # Agregar columnas faltantes
+    # Agrega las columnas faltantes para que coincida con expected_columns
     for col in expected_columns:
         if col not in df.columns:
-            df[col] = False if "type_" in col else 0.0
+            # Si es tipo dummy (bool), asigna False
+            if col.startswith('type_'):
+                df[col] = False
+            else:
+                df[col] = 0.0
 
-    # Escalar numéricas
-    df[['amount', 'newbalanceOrig', 'oldbalanceOrg']] = scaler.transform(
-        df[['amount', 'newbalanceOrig', 'oldbalanceOrg']]
-    )
+    # Asegúrate que las columnas dummy sean booleanas
+    dummy_cols = [c for c in expected_columns if c.startswith('type_')]
+    df[dummy_cols] = df[dummy_cols].astype(bool)
 
-    # Asegurar orden exacto
+    # Escala columnas numéricas (debe incluir todas las que usas)
+    numeric_cols = ['amount', 'newbalanceOrig', 'oldbalanceOrg']
+    df[numeric_cols] = scaler.transform(df[numeric_cols])
+
+    # Reordena exactamente las columnas esperadas
     df = df.loc[:, expected_columns]
 
     return df
 
-# Cargar modelo y scaler
+# Carga modelo y scaler
 try:
-    loaded_model = joblib.load(MODEL_PATH)
-    loaded_scaler = joblib.load(SCALER_PATH)
+    model = joblib.load(MODEL_PATH)
+    scaler = joblib.load(SCALER_PATH)
 except FileNotFoundError:
-    st.error("❌ No se encontraron los archivos del modelo o escalador.")
+    st.error("No se encontró el archivo del modelo o escalador.")
     st.stop()
 
-# Obtener columnas que el modelo espera (en orden)
-expected_columns = list(loaded_model.feature_names_in_)
+# Obtén las columnas exactas que el modelo espera
+expected_cols = list(model.feature_names_in_)
 
-# App Streamlit
-st.title("🔍 Detección de Fraude en Transacciones")
+st.title("Detección de Fraude en Transacciones")
 
-uploaded_file = st.file_uploader("📁 Sube tu archivo Excel (.xlsx) con transacciones", type=["xlsx"])
+uploaded_file = st.file_uploader("Sube archivo Excel (.xlsx) con las transacciones", type="xlsx")
 
 if uploaded_file is not None:
+    df = pd.read_excel(uploaded_file)
+    st.write("Datos originales:")
+    st.write(df.head())
+
     try:
-        df = pd.read_excel(uploaded_file)
-        st.subheader("✅ Datos cargados:")
-        st.write(df.head())
+        df_proc = preprocess_data(df.copy(), scaler, expected_cols)
+        st.write("Datos preprocesados:")
+        st.write(df_proc.head())
 
-        st.subheader("⚙️ Preprocesando datos...")
-        df_processed = preprocess_data(df.copy(), loaded_scaler, expected_columns)
+        # Validación extra
+        st.write("Columnas esperadas:", expected_cols)
+        st.write("Columnas del DataFrame preprocesado:", list(df_proc.columns))
+        st.write("Tipos de columnas:")
+        st.write(df_proc.dtypes)
 
-        # Confirmar orden y tipo antes de predecir
-        assert list(df_processed.columns) == expected_columns, "Orden de columnas inconsistente"
-        assert all(df_processed.dtypes == pd.Series({col: loaded_model.feature_names_in_.dtype for col in expected_columns})), "Tipos inconsistentes"
+        # Predecir
+        preds = model.predict(df_proc)
+        df['Fraude_Predicho'] = preds
 
-        st.write("🔎 Datos listos para predecir:")
-        st.write(df_processed.head())
-
-        # Predicciones
-        predictions = loaded_model.predict(df_processed)
-        df['Fraude_Predicho'] = predictions
-
-        st.subheader("📋 Resultados:")
+        st.write("Predicciones:")
         st.write(df[['amount', 'type', 'Fraude_Predicho']].head())
-        st.success(f"✅ Total de transacciones predichas como fraudulentas: {df['Fraude_Predicho'].sum()}")
+        st.success(f"Total predicciones de fraude: {sum(preds)}")
 
     except Exception as e:
-        st.error(f"❌ Ocurrió un error durante el procesamiento: {e}")
+        st.error(f"Error durante el procesamiento: {e}")
