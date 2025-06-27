@@ -70,9 +70,7 @@ if uploaded_file is not None:
         if present_cols_to_scale:
             st.subheader(f"Valores originales de las columnas a escalar ({present_cols_to_scale}):")
             st.write(df[present_cols_to_scale].head()) # Display values before scaling
-
-            df[present_cols_to_scale] = loaded_scaler.transform(df[present_cols_to_scale])
-            st.info(f"Columnas escaladas: {present_cols_to_scale}")
+             df[['amount', 'newbalanceOrig']] = loaded_scaler.transform(df[['amount', 'newbalanceOrig']])
         else:
             st.warning("No se encontraron columnas para escalar entre 'amount' y 'newbalanceOrig'.")
             st.warning("Esto podría causar problemas si su modelo espera que estas características estén escaladas.")
