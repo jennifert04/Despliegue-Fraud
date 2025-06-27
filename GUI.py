@@ -1,94 +1,94 @@
-# prompt: despliegue completo en Streamlit para predicción de fraude con escalado y diagnóstico
 import streamlit as st
 import pandas as pd
 import os
 import joblib
 
-# Título de la app
-st.title("🛡️ Detección de Fraude en Transacciones")
+# Streamlit app title
+st.title('Fraud Detection Prediction App')
 
-st.write("""
-Esta aplicación predice si una transacción es fraudulenta usando un modelo de Machine Learning.
-""")
-
-# Cargar archivos del modelo y scaler
-scaler_filename = 'standard_scaler.pkl'  # Asegúrate que este scaler fue entrenado con .fit() y guardado con joblib
-model_filename = 'best_fraud_detection_model_SVM.pkl'
-
-if not os.path.exists(scaler_filename) or not os.path.exists(model_filename):
-    st.error("❌ No se encuentran los archivos del modelo o del escalador.")
-    st.stop()
-
-# Cargar scaler y modelo
-scaler = joblib.load(scaler_filename)
-model = joblib.load(model_filename)
-
-# Subir archivo
-uploaded_file = st.file_uploader("📁 Sube tu archivo Excel (.xlsx) con transacciones", type=['xlsx'])
+# File upload (assuming the user will upload a file now)
+uploaded_file = st.file_uploader("Upload your Excel file (datos_futuros.xlsx)", type=['xlsx'])
 
 if uploaded_file is not None:
     try:
+        # Read the uploaded file
         df = pd.read_excel(uploaded_file)
 
-        st.subheader("📄 Datos cargados:")
+        st.subheader("Original Data:")
         st.write(df.head())
 
-        # Verificar tipos de columnas relevantes
-        st.subheader("🔍 Tipos de datos originales:")
-        st.write(df.dtypes)
+        # Data preprocessing steps (as in the original notebook)
+        # Drop unnecessary columns
+        df = df.drop(columns=['newbalanceDest', 'oldbalanceDest', 'oldbalanceOrg'], errors='ignore')
+        df = df.drop(columns=['step', 'nameOrig', 'nameDest'], errors='ignore')
+        df = df.drop(columns=['isFlaggedFraud'], errors='ignore')
 
-        # Asegurar que columnas sean numéricas
-        df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
-        df['newbalanceOrig'] = pd.to_numeric(df['newbalanceOrig'], errors='coerce')
-
-        # Mostrar si hay valores nulos
-        st.subheader("🧪 Valores nulos tras conversión a numérico:")
-        st.write(df[['amount', 'newbalanceOrig']].isnull().sum())
-
-        # Eliminar columnas no necesarias (si existen)
-        df = df.drop(columns=['newbalanceDest', 'oldbalanceDest', 'oldbalanceOrg', 'step', 'nameOrig', 'nameDest', 'isFlaggedFraud'], errors='ignore')
-
-        # Convertir columnas categóricas
+        # Convert object columns to category (assuming 'type' is the only object column left)
         for col in df.columns:
             if df[col].dtype == 'object':
                 df[col] = df[col].astype('category')
 
-        # One-hot encoding
+        # One-hot encode 'type' column
         df = pd.get_dummies(df, columns=['type'], prefix='type', drop_first=False)
 
-        # Ver estadísticas antes del escalado
-        st.subheader("📊 Estadísticas ANTES del escalado:")
-        st.write(df[['amount', 'newbalanceOrig']].describe())
+        # Define the paths to the scaler and model files
+        scaler_filename = 'standard_scaler.pkl'
+        model_filename = 'best_fraud_detection_model_SVM.pkl'
 
-        # Escalar columnas numéricas
-        cols_to_scale = ['amount', 'newbalanceOrig']
-        if all(col in df.columns for col in cols_to_scale):
-            df[cols_to_scale] = scaler.transform(df[cols_to_scale])
+        # Check if the scaler and model files exist
+        if not os.path.exists(scaler_filename):
+            st.error(f"Error: Scaler file '{scaler_filename}' not found. Please ensure it's in the correct directory.")
+        elif not os.path.exists(model_filename):
+            st.error(f"Error: Model file '{model_filename}' not found. Please ensure it's in the correct directory.")
         else:
-            st.warning("⚠️ Faltan columnas necesarias para escalar.")
+            # Load the scaler and model
+            loaded_scaler = joblib.load(scaler_filename)
+            loaded_model = joblib.load(model_filename)
 
-        # Ver estadísticas después del escalado
-        st.subheader("📊 Estadísticas DESPUÉS del escalado:")
-        st.write(df[['amount', 'newbalanceOrig']].describe())
+            # Convert columns to float before scaling to avoid type issues
+            df['amount'] = pd.to_numeric(df['amount'], errors='coerce').astype(float)
+            df['newbalanceOrig'] = pd.to_numeric(df['newbalanceOrig'], errors='coerce').astype(float)
 
-        # Asegurar columnas esperadas por el modelo
-        expected_columns = ['amount', 'newbalanceOrig', 'type_CASH_IN', 'type_CASH_OUT', 'type_DEBIT', 'type_PAYMENT', 'type_TRANSFER']
-        for col in expected_columns:
-            if col not in df.columns:
-                df[col] = 0  # agregar columnas faltantes con 0
-        df = df[expected_columns]  # orden correcto
+            # Warn if there are nulls after conversion
+            if df[['amount', 'newbalanceOrig']].isnull().any().any():
+                st.warning("⚠️ Se encontraron valores nulos tras conversión a float.")
 
-        # Predicción
-        st.subheader("🤖 Realizando predicciones...")
-        predictions = model.predict(df)
-        df['Fraude_Predicho'] = predictions
+            # Apply scaling to relevant columns
+            cols_to_scale = ['amount', 'newbalanceOrig']
+            present_cols_to_scale = [col for col in cols_to_scale if col in df.columns]
+            if present_cols_to_scale:
+                df[present_cols_to_scale] = loaded_scaler.transform(df[present_cols_to_scale])
+            else:
+                st.warning("Columns 'amount' or 'newbalanceOrig' not found for scaling.")
 
-        # Mostrar resultados
-        st.subheader("✅ Resultados:")
-        st.write(df.head())
+            # Ensure all expected columns are present for the model
+            expected_columns = ['amount', 'newbalanceOrig', 'type_CASH_IN', 'type_CASH_OUT',
+                                'type_DEBIT', 'type_PAYMENT', 'type_TRANSFER']
+            for col in expected_columns:
+                if col not in df.columns:
+                    df[col] = 0  # Add missing dummy columns with 0
 
-        fraud_count = df['Fraude_Predicho'].sum()
-        st.write(f"🔎 Número total de transacciones fraudulentas predichas: {fraud_count}")
+            # Reorder columns to match training
+            df = df[expected_columns]
+
+            # Make predictions
+            try:
+                predictions = loaded_model.predict(df)
+                df['predictions'] = predictions
+
+                st.subheader("Data with Predictions:")
+                st.write(df.head())
+
+                st.subheader("Prediction Summary:")
+                fraud_count = df['predictions'].sum()
+                total_count = len(df)
+                st.write(f"Total records: {total_count}")
+                st.write(f"Predicted Fraudulent Transactions: {fraud_count}")
+
+            except Exception as e:
+                st.error(f"Error during prediction: {e}")
+                st.write("Please ensure the input data structure matches the expected format for the loaded model.")
 
     except Exception as e:
-        st.error(f"❌ Error al procesar el archivo: {e}")
+        st.error(f"Error processing the uploaded file: {e}")
+        st.write("Please ensure the file is a valid Excel file.")
