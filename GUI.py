@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import os
 import joblib
+import numpy as np # Import numpy for NaN and inf checks
+import sklearn # Import sklearn to check version
 
 # Streamlit app title
 st.title('Fraud Detection Prediction App')
@@ -98,6 +100,25 @@ if uploaded_file is not None:
         st.write("Columns and their order before prediction:")
         st.write(df.columns.tolist())
 
+        # --- Debugging checks before prediction ---
+        st.subheader("Pre-prediction Data Checks:")
+        # Check for NaN values
+        if df.isnull().sum().sum() > 0:
+            st.error("Warning: DataFrame contains NaN values after preprocessing!")
+            st.write(df.isnull().sum()) # Show count of NaNs per column
+
+        # Check for infinite values
+        if np.isinf(df).sum().sum() > 0:
+            st.error("Warning: DataFrame contains Infinite values after preprocessing!")
+            st.write(np.isinf(df).sum()) # Show count of Infs per column
+
+        # Display data types
+        st.write("Data types of preprocessed DataFrame columns:")
+        st.write(df.dtypes)
+
+        # Display scikit-learn version
+        st.info(f"Scikit-learn version: {sklearn.__version__}")
+
 
         # Make predictions
         try:
@@ -122,6 +143,7 @@ if uploaded_file is not None:
             st.write("Please ensure the input data structure and feature order precisely match the model's training requirements.")
             st.write(f"Expected columns by model (from `expected_columns` list): {expected_columns}")
             st.write(f"Columns in preprocessed DataFrame: {df.columns.tolist()}")
+            st.write("The error might be due to unexpected data values (e.g., NaNs, Infs) or data type mismatches.")
 
     except Exception as e:
         st.error(f"Error processing the uploaded file: {e}")
