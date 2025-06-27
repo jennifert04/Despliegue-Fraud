@@ -6,8 +6,8 @@ import os
 from sklearn.preprocessing import LabelEncoder, StandardScaler # Import StandardScaler
 
 # Define the path to the model and scaler files
-MODEL_PATH = 'best_fraud_detection_model_Naive_Bayes.pkl'
-SCALER_PATH = 'standard_scaler.pkl'
+MODEL_PATH = joblib.load('best_fraud_detection_model_Naive_Bayes.pkl')
+SCALER_PATH = joblib.load('standard_scaler.pkl')
 
 # Function to preprocess the data (adapted for the new dataset)
 def preprocess_data(df, scaler):
