@@ -1,119 +1,88 @@
-# prompt: haz todo el depliegue anterior en streamlit
 
 import streamlit as st
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
-import os
 import joblib
-import tempfile
+import os
+from sklearn.preprocessing import LabelEncoder, StandardScaler # Import StandardScaler
 
-# Streamlit app title
-st.title("Fraud Detection Prediction")
+# Define the path to the model and scaler files
+MODEL_PATH = 'best_fraud_detection_model_Naive_Bayes.pkl'
+SCALER_PATH = 'standard_scaler.pkl'
 
-# Function to load the dataset
-@st.cache_data
-def load_data(uploaded_file):
-    if uploaded_file is not None:
-        # Use a temporary file to read the uploaded file
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-            tmp_file.write(uploaded_file.getvalue())
-            tmp_file_path = tmp_file.name
-        df = pd.read_excel(tmp_file_path)
-        os.remove(tmp_file_path)  # Remove the temporary file
-        return df
-    return None
+# Function to preprocess the data (adapted for the new dataset)
+def preprocess_data(df, scaler):
+    # Drop specified columns
+    df = df.drop(columns=['newbalanceDest', 'oldbalanceDest', 'oldbalanceOrg', 'step', 'nameOrig', 'nameDest', 'isFlaggedFraud'])
 
-# Function to preprocess the data
-def preprocess_data(df, scaler_path):
-    if df is None:
-        return None
-
-    df = df.drop(columns=['newbalanceDest', 'oldbalanceDest', 'oldbalanceOrg'])
-    df = df.drop(columns=['step', 'nameOrig', 'nameDest'])
-    df = df.drop(columns=['isFlaggedFraud'])
-
+    # Convert object type columns to category
     for col in df.columns:
         if df[col].dtype == 'object':
             df[col] = df[col].astype('category')
 
+    # Apply One-Hot Encoding to the 'type' column
     df = pd.get_dummies(df, columns=['type'], prefix='type', drop_first=False)
 
-    # Load and apply the scaler
-    if os.path.exists(scaler_path):
-        loaded_scaler = joblib.load(scaler_path)
-        # Ensure only existing columns are transformed
-        cols_to_scale = ['amount', 'newbalanceOrig']
-        cols_to_scale_exist = [col for col in cols_to_scale if col in df.columns]
-        if cols_to_scale_exist:
-             df[cols_to_scale_exist] = loaded_scaler.transform(df[cols_to_scale_exist])
-    else:
-        st.error(f"Scaler file not found at: {scaler_path}")
-        return None
+    # Apply Scaling to 'amount' and 'newbalanceOrig'
+    # Note: In a real application, the scaler should be fit on the training data
+    # and only transformed on the new data. Assuming the provided scaler is already fit.
+    df[['amount', 'newbalanceOrig']] = scaler.transform(df[['amount', 'newbalanceOrig']])
+
+    # Handle potential missing columns after one-hot encoding
+    # This assumes the training data had the same 'type' categories.
+    # If not, you might need a more robust way to handle this (e.g., reindexing).
+    expected_columns = ['amount', 'newbalanceOrig', 'type_CASH_IN', 'type_CASH_OUT', 'type_DEBIT', 'type_PAYMENT', 'type_TRANSFER']
+    for col in expected_columns:
+        if col not in df.columns:
+            df[col] = 0 # Add missing columns with a default value of 0
+
+    # Ensure columns are in the same order as the training data
+    df = df[expected_columns] # This assumes the expected_columns list is in the correct order
 
     return df
 
-# Function to load the model and make predictions
-def predict_fraud(df, model_path):
-    if df is None:
-        return None
+# Load the pre-trained model and scaler
+try:
+    loaded_model = joblib.load(MODEL_PATH)
+    loaded_scaler = joblib.load(SCALER_PATH)
+except FileNotFoundError:
+    st.error("Error: Model or scaler files not found. Make sure they are in the correct directory.")
+    st.stop()
 
-    if os.path.exists(model_path):
-        loaded_model = joblib.load(model_path)
+# Streamlit App Title
+st.title("Detección de Fraude en Transacciones")
+st.write("""
+Esta aplicación predice si una transacción es fraudulenta basado en los datos proporcionados.
+""")
 
-        # Ensure the columns of the input DataFrame match the columns the model was trained on
-        # This is a common issue when deploying models. You might need to save the training columns
-        # and reindex the input data accordingly. For simplicity here, we assume column order matches.
-        # A more robust approach would involve ensuring column names and order are identical.
-
-        try:
-            predictions = loaded_model.predict(df)
-            df['predictions'] = predictions
-            return df
-        except Exception as e:
-            st.error(f"Error during prediction: {e}")
-            st.warning("Please ensure the input data columns match the training data columns.")
-            return None
-    else:
-        st.error(f"Model file not found at: {model_path}")
-        return None
-
-
-# File upload
-uploaded_file = st.file_uploader("Upload your Excel file (datos_futuros.xlsx)", type=["xlsx"])
-
-# Define model and scaler paths (adjust these paths based on your deployment structure)
-# If running locally, these should be local paths. If deploying to cloud,
-# consider using relative paths or environment variables.
-# Example: If scaler and model are in the same directory as the streamlit app.py file:
-scaler_path = 'standard_scaler.pkl'
-model_path = 'best_fraud_detection_model_Naive_Bayes.pkl'
-
+# File uploader for the user to upload their data
+uploaded_file = st.file_uploader("Sube tu archivo Excel (solo .xlsx) con datos de transacciones", type=["xlsx"])
 
 if uploaded_file is not None:
-    st.write("File uploaded successfully. Loading and processing data...")
+    try:
+        # Read the uploaded Excel file into a pandas DataFrame
+        df = pd.read_excel(uploaded_file)
+        st.subheader("Datos cargados:")
+        st.write(df.head())
 
-    df_original = load_data(uploaded_file)
+        # Preprocess the uploaded data
+        st.subheader("Preprocesando datos...")
+        df_processed = preprocess_data(df.copy(), loaded_scaler) # Use .copy() to avoid modifying the original DataFrame
+        st.write("Datos preprocesados (primeras filas):")
+        st.write(df_processed.head())
 
-    if df_original is not None:
-        st.write("Original Data:")
-        st.dataframe(df_original.head())
+        # Make predictions
+        st.subheader("Realizando predicciones...")
+        predictions = loaded_model.predict(df_processed)
 
-        st.write("Preprocessing data...")
-        df_processed = preprocess_data(df_original.copy(), scaler_path)
+        # Add predictions to the original DataFrame (aligning by index)
+        df['Fraude_Predicho'] = predictions
 
-        if df_processed is not None:
-            st.write("Making predictions...")
-            df_with_predictions = predict_fraud(df_processed.copy(), model_path)
+        st.subheader("Resultados de la Predicción:")
+        st.write(df[['amount', 'type', 'Fraude_Predicho']].head()) # Display some key columns and the prediction
 
-            if df_with_predictions is not None:
-                st.write("Predictions:")
-                # Display the original data with predictions added
-                st.dataframe(df_with_predictions)
+        # You can also display a summary of predictions
+        fraud_count = df['Fraude_Predicho'].sum()
+        st.write(f"Número total de transacciones predichas como fraudulentas: {fraud_count}")
 
-                # Optional: Filter and display only the predicted frauds
-                fraud_predictions = df_with_predictions[df_with_predictions['predictions'] == 1]
-                if not fraud_predictions.empty:
-                    st.write("Potential Fraud Transactions:")
-                    st.dataframe(fraud_predictions)
-                else:
-                    st.write("No potential fraud transactions detected.")
+    except Exception as e:
+        st.error(f"Ocurrió un error durante el procesamiento: {e}")
